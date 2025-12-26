@@ -1,49 +1,23 @@
 package akkay.pvpnotif;
 
-import blue.endless.jankson.*;
+import blue.endless.jankson.Jankson;
+import blue.endless.jankson.JsonElement;
+import blue.endless.jankson.JsonObject;
 import blue.endless.jankson.api.SyntaxError;
-import com.google.gson.Gson;
 import net.fabricmc.api.ModInitializer;
-
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.player.Player;
-// import org.slf4j.Logger;
-// import org.slf4j.LoggerFactory;
-import java.io.*;
+
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.*;
 
-class Config {
-	int threshold = 400; // 20 seconds
-	boolean soundNotification = true; // TODO
-}
-
-class EffectTriggered {
-	private boolean effectTriggered = false;
-	private int duration;
-
-	public boolean isEffectTriggered() {
-		return effectTriggered;
-	}
-	public void setEffectTriggered(boolean flag) {
-		this.effectTriggered = flag;
-	}
-	public int getDuration() {
-		return duration;
-	}
-	public void setDuration(int duration) {
-		this.duration = duration;
-	}
-
-	public EffectTriggered(int duration) {
-		this.duration = duration;
-	}
-}
-
 public class Pvpnotif implements ModInitializer {
-	// public static final String MOD_ID = "pvpnotif";
-	// public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
-
     // Set of the effects in minecraft form that are going to be checked on the player
 	private final Set<String> pvpEffects = new HashSet<>();
 
@@ -54,17 +28,18 @@ public class Pvpnotif implements ModInitializer {
 	private final List<String> effectsToDelete = new LinkedList<>();
 
     // File Object
-    private final File configFile = new File("config/pvpnotif.json");
+	public static final File configFile = new File("config/pvpnotif.json");
 
 	// Config
-	private Config config;
+	public static Config config;
 
     // Jankson Object
-    // TODO continue
 	Jankson jankson = Jankson.builder().build();
 
 	@Override
 	public void onInitialize() {
+
+		// Config file
 		try {
 			if (!configFile.exists()) {
 				createConfigFile();
@@ -78,6 +53,11 @@ public class Pvpnotif implements ModInitializer {
 		} catch (IOException | SyntaxError e) {
 			System.out.println(e.getMessage());
 		}
+
+		// Sprint HUD
+		SprintText.register();
+
+		// Effects
 		initializeEffects();
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			Player player = client.player;
@@ -92,12 +72,12 @@ public class Pvpnotif implements ModInitializer {
                 int timeLeft = effectTriggered.getDuration();
 
                 // Check if the notification was given and if the duration hit the threshold
-				if ((!effectTriggered.isEffectTriggered()) && timeLeft <= config.threshold) {
+				if ((!effectTriggered.isEffectTriggered()) && timeLeft <= config.threshold * 20) {
 					effectTriggered.setEffectTriggered(true);
 					System.out.println(effect + " will end in " + timeLeft/20 + " seconds.");
 				}
 				// Check if the effect was renewed
-				else if (effectTriggered.isEffectTriggered() && timeLeft > config.threshold) {
+				else if (effectTriggered.isEffectTriggered() && timeLeft > config.threshold * 20) {
 					effectTriggered.setEffectTriggered(false);
 				}
 			}
@@ -151,16 +131,42 @@ public class Pvpnotif implements ModInitializer {
     }
 
 	Config readConfig() throws IOException, SyntaxError {
-		try (FileReader fr = new FileReader(configFile); Scanner scanner = new Scanner(fr)) {
+		try (FileReader fr = new FileReader(configFile);
+			 Scanner scanner = new Scanner(fr)) {
+
 			StringBuilder sb = new StringBuilder();
-			while(scanner.hasNextLine()) sb.append(scanner.nextLine()).append("\n");
+			while (scanner.hasNextLine())
+				sb.append(scanner.nextLine()).append("\n");
+
 			JsonObject toRead = jankson.load(sb.toString());
 			Config readConfig = jankson.fromJson(toRead, Config.class);
-            return readConfig;
-		} catch (IOException | SyntaxError e) {
+
+			boolean isDifferent = false;
+
+			for (Field field : readConfig.getClass().getDeclaredFields()) {
+				if (Modifier.isStatic(field.getModifiers())) continue;
+
+				String fieldName = field.getName();
+
+				if (!toRead.containsKey(fieldName)) {
+					field.setAccessible(true);
+					toRead.put(fieldName, jankson.toJson(field.get(readConfig)));
+					isDifferent = true;
+				}
+			}
+
+			if (isDifferent) {
+				try (FileWriter fw = new FileWriter(configFile)) {
+					fw.write(toRead.toJson(true, true));
+				}
+			}
+
+			return readConfig;
+		} catch (IOException | SyntaxError | IllegalAccessException e) {
 			System.out.println("Config corrupted, creating new one: " + e.getMessage());
 			createConfigFile();
 			return new Config();
 		}
 	}
 }
+

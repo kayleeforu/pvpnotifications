@@ -16,7 +16,8 @@
 	"entrypoints": {
 		"main": [
 			"akkay.pvpnotif.Pvpnotif"
-		]
+		],
+		"modmenu": [ "akkay.pvpnotif.ModMenu" ]
 	},
 	"depends": {
 		"fabricloader": ">=0.18.4",
