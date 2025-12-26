@@ -1,5 +1,7 @@
 package akkay.pvpnotif;
 
+import blue.endless.jankson.*;
+import blue.endless.jankson.api.SyntaxError;
 import com.google.gson.Gson;
 import net.fabricmc.api.ModInitializer;
 
@@ -8,9 +10,13 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.player.Player;
 // import org.slf4j.Logger;
 // import org.slf4j.LoggerFactory;
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.util.*;
+
+class Config {
+	int threshold = 400; // 20 seconds
+	boolean soundNotification = true; // TODO
+}
 
 class EffectTriggered {
 	private boolean effectTriggered = false;
@@ -50,30 +56,29 @@ public class Pvpnotif implements ModInitializer {
     // File Object
     private final File configFile = new File("config/pvpnotif.json");
 
-    // Gson Object
-    // TODO continue
-    Gson gson = new Gson();
+	// Config
+	private Config config;
 
-	// Variables
-	private final int threshold = 400; // 20 seconds
+    // Jankson Object
+    // TODO continue
+	Jankson jankson = Jankson.builder().build();
 
 	@Override
 	public void onInitialize() {
+		try {
+			if (!configFile.exists()) {
+				createConfigFile();
+				config = new Config();
+			} else config = readConfig();
+			System.out.println();
+			System.out.println();
+			System.out.println("PvP Notifications has been initialized");
+			System.out.println();
+			System.out.println();
+		} catch (IOException | SyntaxError e) {
+			System.out.println(e.getMessage());
+		}
 		initializeEffects();
-        // TODO Change the text output, maybe leave only the init message
-        try {
-            if (!configFile.exists()) {
-                System.out.println("File does not exist, it will be created");
-                createConfigFile();
-            }
-            else System.out.println("File already exists");
-        } catch (IOException e) {
-            System.out.println(e.getMessage());
-        } finally {
-            System.out.println("PvP Notifications has been initialized");
-        }
-
-
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			Player player = client.player;
 			if (player == null) return;
@@ -87,12 +92,12 @@ public class Pvpnotif implements ModInitializer {
                 int timeLeft = effectTriggered.getDuration();
 
                 // Check if the notification was given and if the duration hit the threshold
-				if ((!effectTriggered.isEffectTriggered()) && timeLeft <= threshold) {
+				if ((!effectTriggered.isEffectTriggered()) && timeLeft <= config.threshold) {
 					effectTriggered.setEffectTriggered(true);
 					System.out.println(effect + " will end in " + timeLeft/20 + " seconds.");
 				}
 				// Check if the effect was renewed
-				else if (effectTriggered.isEffectTriggered() && timeLeft > threshold) {
+				else if (effectTriggered.isEffectTriggered() && timeLeft > config.threshold) {
 					effectTriggered.setEffectTriggered(false);
 				}
 			}
@@ -135,7 +140,27 @@ public class Pvpnotif implements ModInitializer {
         pvpEffects.add("effect.minecraft.absorption");
 	}
 
-    void createConfigFile() throws IOException {
-        configFile.createNewFile();
+    void createConfigFile() throws IOException, SyntaxError {
+		try (FileWriter fw = new FileWriter(configFile)) {
+			Config config = new Config();
+			configFile.createNewFile();
+			JsonElement jsonConfig = jankson.toJson(config);
+			String toFile = jsonConfig.toJson(true, true);
+			fw.write(toFile);
+		}
     }
+
+	Config readConfig() throws IOException, SyntaxError {
+		try (FileReader fr = new FileReader(configFile); Scanner scanner = new Scanner(fr)) {
+			StringBuilder sb = new StringBuilder();
+			while(scanner.hasNextLine()) sb.append(scanner.nextLine()).append("\n");
+			JsonObject toRead = jankson.load(sb.toString());
+			Config readConfig = jankson.fromJson(toRead, Config.class);
+            return readConfig;
+		} catch (IOException | SyntaxError e) {
+			System.out.println("Config corrupted, creating new one: " + e.getMessage());
+			createConfigFile();
+			return new Config();
+		}
+	}
 }
