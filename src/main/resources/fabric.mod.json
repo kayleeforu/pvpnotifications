@@ -1,0 +1,27 @@
+{
+	"schemaVersion": 1,
+	"id": "pvpnotif",
+	"version": "${version}",
+	"name": "pvpnotif",
+	"description": "A mod for PvP that adds notification to events of the soon ending potion effect or the ability to block with the shield after it was broken.",
+	"authors": [
+		"kayleeforu"
+	],
+	"contact": {
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "MIT",
+	"icon": "assets/pvpnotif/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"akkay.pvpnotif.Pvpnotif"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.18.4",
+		"minecraft": "~1.21.11",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}
